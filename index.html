@@ -1,0 +1,2938 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>CyberCross - Juego Educativo de Ciberseguridad PWA</title>
+  
+  <!-- Metadatos PWA, SEO y Compatibilidad iOS -->
+  <meta name="description" content="CyberCross: Aprende ciberseguridad resolviendo crucigramas interactivos con estética retro hacker y mecánicas tipo CodyCross. 100% Offline PWA.">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="CyberCross">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+
+  <style>
+    /* ==========================================================================
+       1. VARIABLES DE DISEÑO & IDENTIDAD RETRO HACKER
+       ========================================================================== */
+    :root {
+      --bg-deep: #05080c;
+      --bg-surface: #0a1017;
+      --bg-panel: rgba(13, 20, 29, 0.85);
+      --bg-panel-solid: #0d141d;
+      --border-color: #172d3e;
+      --border-glow: #00ff6640;
+
+      /* Acentos Hacker */
+      --color-green: #00ff66;
+      --color-green-glow: rgba(0, 255, 102, 0.4);
+      --color-cyan: #00f0ff;
+      --color-cyan-glow: rgba(0, 240, 255, 0.4);
+      --color-amber: #ffb800;
+      --color-red: #ff3366;
+      --color-red-glow: rgba(255, 51, 102, 0.4);
+      --color-purple: #bd00ff;
+
+      /* Tipografía y Textos */
+      --text-main: #e2f4ff;
+      --text-muted: #6b889b;
+      --text-dim: #3a5364;
+
+      /* Fuentes */
+      --font-mono: "Fira Code", "Courier New", Consolas, monospace;
+      --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+      /* Dimensiones Responsivas y Fluidas */
+      --header-height: clamp(3.25rem, 8vh, 3.85rem);
+      --max-width: clamp(20rem, 96vw, 36rem);
+      --radius-sm: 0.375rem;
+      --radius-md: 0.625rem;
+      --radius-lg: 1rem;
+      --cell-size: clamp(2rem, 6.2vw, 2.5rem);
+
+      /* Tipografía Fluida */
+      --font-hud-title: clamp(0.95rem, 2.6vw, 1.15rem);
+      --font-clue: clamp(0.85rem, 2.4vw, 0.98rem);
+      --font-cell: clamp(1.05rem, 3.2vw, 1.25rem);
+      --font-tile: clamp(1.18rem, 3.8vw, 1.45rem);
+    }
+
+    /* Reset y base */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html {
+      height: 100%;
+      -webkit-text-size-adjust: 100%;
+    }
+
+    body {
+      background-color: var(--bg-deep);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow-x: hidden;
+      position: relative;
+      touch-action: manipulation;
+      /* Compatibilidad con notch y barra de inicio (Safe Area) */
+      padding-top: env(safe-area-inset-top, 0px);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      padding-left: env(safe-area-inset-left, 0px);
+      padding-right: env(safe-area-inset-right, 0px);
+    }
+
+    /* Evitar zoom accidental y demoras de doble toque en móviles */
+    button, a, input, [role="button"], .letter-tile, .grid-cell, .tool-btn, .clue-nav-btn, .icon-btn, .primary-btn, .secondary-btn {
+      touch-action: manipulation;
+    }
+
+    /* Efecto CRT Scanlines sutil */
+    body::before {
+      content: "";
+      position: fixed;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
+                  linear-gradient(90deg, rgba(255, 0, 0, 0.02), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.02));
+      background-size: 100% 3px, 6px 100%;
+      pointer-events: none;
+      z-index: 999;
+      opacity: 0.65;
+    }
+
+    /* Contenedor principal de la app */
+    #app-container {
+      width: 100%;
+      max-width: var(--max-width);
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      background-color: var(--bg-surface);
+      box-shadow: 0 0 50px rgba(0, 0, 0, 0.8), 0 0 20px rgba(0, 255, 102, 0.05);
+      border-left: 1px solid var(--border-color);
+      border-right: 1px solid var(--border-color);
+    }
+
+    /* ==========================================================================
+       2. TOP HUD (BARRA DE ESTADO CYBER)
+       ========================================================================== */
+    header.cyber-hud {
+      min-height: var(--header-height);
+      background: var(--bg-panel);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: max(0.4rem, env(safe-area-inset-top, 0px)) clamp(0.75rem, 3vw, 1.25rem) 0.4rem clamp(0.75rem, 3vw, 1.25rem);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .hud-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+
+    .hud-brand svg {
+      width: 24px;
+      height: 24px;
+      filter: drop-shadow(0 0 6px var(--color-green));
+    }
+
+    .hud-title {
+      font-family: var(--font-mono);
+      font-size: var(--font-hud-title);
+      font-weight: 800;
+      letter-spacing: 1px;
+      color: var(--color-green);
+      text-shadow: 0 0 8px var(--color-green-glow);
+    }
+
+    .hud-title span {
+      color: var(--color-cyan);
+    }
+
+    .hud-stats {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .stat-badge {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(13, 27, 42, 0.8);
+      border: 1px solid var(--border-color);
+      padding: 4px 8px;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+
+    .stat-badge.rep {
+      color: var(--color-cyan);
+      border-color: rgba(0, 240, 255, 0.3);
+    }
+
+    .stat-badge.level {
+      color: var(--color-amber);
+      border-color: rgba(255, 184, 0, 0.3);
+      cursor: pointer;
+    }
+
+    .hud-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .icon-btn {
+      background: rgba(15, 23, 34, 0.8);
+      border: 1px solid var(--border-color);
+      color: var(--text-muted);
+      width: 34px;
+      height: 34px;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 0.95rem;
+      transition: all 0.2s ease;
+    }
+
+    .icon-btn:hover, .icon-btn:active {
+      color: var(--color-green);
+      border-color: var(--color-green);
+      box-shadow: 0 0 10px var(--color-green-glow);
+    }
+
+    .badge-count {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      background: var(--color-red);
+      color: #fff;
+      font-size: 0.65rem;
+      font-family: var(--font-mono);
+      padding: 1px 4px;
+      border-radius: 8px;
+      font-weight: bold;
+    }
+
+    /* ==========================================================================
+       3. PANEL DE PISTA ACTIVA (CLUE BANNER)
+       ========================================================================== */
+    .clue-panel {
+      background: linear-gradient(180deg, rgba(16, 26, 38, 0.95) 0%, rgba(10, 16, 24, 0.95) 100%);
+      border-bottom: 1px solid var(--border-color);
+      padding: clamp(0.65rem, 2.5vw, 0.85rem) clamp(0.75rem, 3vw, 1.25rem);
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      position: relative;
+    }
+
+    .clue-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+    }
+
+    .clue-tag {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--color-cyan);
+      font-weight: 700;
+    }
+
+    .clue-tag .dir-icon {
+      font-size: 0.85rem;
+    }
+
+    .clue-nav {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .clue-nav-btn {
+      background: rgba(0, 240, 255, 0.08);
+      border: 1px solid rgba(0, 240, 255, 0.2);
+      color: var(--color-cyan);
+      border-radius: 4px;
+      width: 26px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 0.75rem;
+      transition: all 0.2s;
+    }
+
+    .clue-nav-btn:hover {
+      background: var(--color-cyan);
+      color: var(--bg-deep);
+    }
+
+    .clue-text {
+      font-size: var(--font-clue);
+      line-height: 1.38;
+      color: var(--text-main);
+      min-height: 2.5rem;
+      display: flex;
+      align-items: center;
+    }
+
+    .word-progress-slots {
+      display: flex;
+      gap: 5px;
+      margin-top: 4px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+
+    .slot-pill {
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      font-weight: 700;
+      width: 22px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 3px;
+      background: #09131d;
+      border: 1px dashed var(--text-dim);
+      color: var(--text-muted);
+      transition: all 0.2s;
+    }
+
+    .slot-pill.filled {
+      border-style: solid;
+      border-color: var(--color-cyan);
+      color: var(--color-cyan);
+      background: rgba(0, 240, 255, 0.1);
+    }
+
+    .slot-pill.locked {
+      border-style: solid;
+      border-color: var(--color-green);
+      color: var(--color-green);
+      background: rgba(0, 255, 102, 0.15);
+      box-shadow: 0 0 6px var(--color-green-glow);
+    }
+
+    /* ==========================================================================
+       4. TABLERO DE CRUCIGRAMA (CROSSWORD GRID)
+       ========================================================================== */
+    .board-wrapper {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: clamp(0.5rem, 2vw, 1rem);
+      overflow: auto;
+      position: relative;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-x pan-y pinch-zoom;
+    }
+
+    .crossword-grid {
+      display: grid;
+      gap: clamp(3px, 0.8vw, 6px);
+      background: rgba(9, 14, 20, 0.6);
+      padding: clamp(0.45rem, 1.5vw, 0.75rem);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-color);
+      box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.6);
+      margin: auto;
+    }
+
+    /* Celda individual */
+    .grid-cell {
+      width: var(--cell-size);
+      height: var(--cell-size);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      font-family: var(--font-mono);
+      font-size: var(--font-cell);
+      font-weight: 800;
+      color: var(--text-main);
+      background: #0d1722;
+      border: 1px solid #1a2f42;
+      cursor: pointer;
+      transition: transform 0.15s ease, border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .grid-cell.empty-space {
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    /* Número indicador de pista en la esquina */
+    .cell-number {
+      position: absolute;
+      top: 1px;
+      left: 3px;
+      font-size: 0.58rem;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      pointer-events: none;
+      font-weight: normal;
+    }
+
+    /* Estados de la celda */
+    .grid-cell.in-active-word {
+      background: #112739;
+      border-color: rgba(0, 240, 255, 0.45);
+    }
+
+    .grid-cell.active-cursor {
+      background: #14354c;
+      border-color: var(--color-cyan);
+      box-shadow: 0 0 12px var(--color-cyan-glow);
+      transform: scale(1.05);
+      z-index: 10;
+    }
+
+    .grid-cell.active-cursor::after {
+      content: "";
+      position: absolute;
+      bottom: 4px;
+      left: 20%;
+      right: 20%;
+      height: 2px;
+      background: var(--color-cyan);
+      animation: cursorBlink 0.9s infinite alternate;
+    }
+
+    @keyframes cursorBlink {
+      0% { opacity: 0.2; }
+      100% { opacity: 1; }
+    }
+
+    .grid-cell.cell-locked {
+      background: rgba(0, 255, 102, 0.12);
+      border-color: rgba(0, 255, 102, 0.5);
+      color: var(--color-green);
+      text-shadow: 0 0 8px var(--color-green-glow);
+    }
+
+    .grid-cell.cell-revealed {
+      background: rgba(255, 184, 0, 0.14);
+      border-color: var(--color-amber);
+      color: var(--color-amber);
+    }
+
+    /* Animación de error (sacudida) */
+    .word-shake {
+      animation: shakeWord 0.45s ease-in-out;
+    }
+
+    @keyframes shakeWord {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-6px); }
+      40% { transform: translateX(6px); }
+      60% { transform: translateX(-4px); }
+      80% { transform: translateX(4px); }
+    }
+
+    /* Animación de éxito (pulso verde neón) */
+    .word-success {
+      animation: successPulse 0.6s ease-out;
+    }
+
+    @keyframes successPulse {
+      0% { transform: scale(1); filter: brightness(1); }
+      50% { transform: scale(1.08); filter: brightness(1.7) drop-shadow(0 0 15px var(--color-green)); }
+      100% { transform: scale(1); filter: brightness(1); }
+    }
+
+    /* ==========================================================================
+       5. ENTRADA INTERACTIVA: RUEDA DE LETRAS DESORDENADAS
+       ========================================================================== */
+    .input-section {
+      background: var(--bg-panel);
+      border-top: 1px solid var(--border-color);
+      padding: 0.75rem clamp(0.75rem, 3vw, 1.25rem) calc(max(0.75rem, env(safe-area-inset-bottom, 0px)) + 0.35rem) clamp(0.75rem, 3vw, 1.25rem);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: clamp(0.5rem, 1.8vw, 0.75rem);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      z-index: 20;
+    }
+
+    /* Fila de controles de acción (Pistas, Shuffle, Borrar) */
+    .input-tools {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      max-width: clamp(18rem, 90vw, 24rem);
+      gap: 0.4rem;
+    }
+
+    .tool-btn {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      background: #0f1c29;
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: clamp(0.45rem, 1.4vw, 0.55rem) clamp(0.55rem, 2vw, 0.85rem);
+      border-radius: var(--radius-sm);
+      font-family: var(--font-mono);
+      font-size: clamp(0.72rem, 2.2vw, 0.82rem);
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+
+    .tool-btn:hover, .tool-btn:active {
+      border-color: var(--color-cyan);
+      box-shadow: 0 0 8px var(--color-cyan-glow);
+      color: var(--color-cyan);
+    }
+
+    .tool-btn.hint-btn {
+      border-color: rgba(255, 184, 0, 0.4);
+      color: var(--color-amber);
+    }
+
+    .tool-btn.hint-btn:hover {
+      box-shadow: 0 0 10px rgba(255, 184, 0, 0.4);
+    }
+
+    .hint-cost-pill {
+      background: rgba(255, 184, 0, 0.15);
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 0.68rem;
+    }
+
+    /* Rueda de Letras (Cluster / Wheel estilo CodyCross) */
+    .letter-wheel-container {
+      position: relative;
+      width: 100%;
+      max-width: clamp(18rem, 90vw, 24rem);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: clamp(0.35rem, 1.6vw, 0.6rem);
+      padding: 0.25rem 0;
+    }
+
+    .letter-tile {
+      width: clamp(2.6rem, 8.5vw, 3.2rem);
+      height: clamp(2.75rem, 9vw, 3.4rem);
+      background: linear-gradient(180deg, #162a3c 0%, #0d1a26 100%);
+      border: 1px solid rgba(0, 240, 255, 0.35);
+      border-bottom: 3px solid rgba(0, 240, 255, 0.6);
+      color: var(--color-cyan);
+      border-radius: var(--radius-md);
+      font-family: var(--font-mono);
+      font-size: var(--font-tile);
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+      transition: transform 0.1s ease, filter 0.1s ease, background 0.15s ease;
+    }
+
+    .letter-tile:active {
+      transform: translateY(2px) scale(0.96);
+      background: var(--color-cyan);
+      color: var(--bg-deep);
+      box-shadow: 0 0 12px var(--color-cyan);
+    }
+
+    .letter-tile.tile-used {
+      opacity: 0.4;
+      border-color: var(--text-dim);
+      border-bottom-width: 1px;
+      color: var(--text-muted);
+      transform: none;
+    }
+
+    /* ==========================================================================
+       6. MODALES Y VENTANAS EMERGENTES (REFUERZO & VICTORIA)
+       ========================================================================== */
+    .modal-backdrop {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(3, 6, 9, 0.85);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 16px;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+    }
+
+    .modal-backdrop.open {
+      display: flex;
+      opacity: 1;
+    }
+
+    .cyber-modal {
+      background: var(--bg-panel-solid);
+      border: 1px solid var(--border-color);
+      width: 100%;
+      max-width: clamp(19rem, 92vw, 29rem);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.9), 0 0 25px rgba(0, 255, 102, 0.15);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      animation: modalSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes modalSlideUp {
+      from { transform: translateY(24px) scale(0.97); opacity: 0; }
+      to { transform: translateY(0) scale(1); opacity: 1; }
+    }
+
+    .modal-banner {
+      background: linear-gradient(90deg, rgba(0, 255, 102, 0.15) 0%, rgba(0, 240, 255, 0.1) 100%);
+      border-bottom: 1px solid var(--border-color);
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modal-banner.warn {
+      background: linear-gradient(90deg, rgba(255, 184, 0, 0.2) 0%, rgba(255, 51, 102, 0.15) 100%);
+      border-bottom-color: rgba(255, 184, 0, 0.3);
+    }
+
+    .modal-title {
+      font-family: var(--font-mono);
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: var(--color-green);
+      letter-spacing: 1px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .modal-title.warn {
+      color: var(--color-amber);
+    }
+
+    .modal-content {
+      padding: clamp(1rem, 3.5vw, 1.25rem);
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+      max-height: 70vh;
+      max-height: 70dvh;
+      overflow-y: auto;
+    }
+
+    /* Tarjeta de Refuerzo Cognitivo */
+    .reinforce-card {
+      background: #09121a;
+      border: 1px solid #1a3246;
+      border-radius: var(--radius-md);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .reinforce-term {
+      font-family: var(--font-mono);
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: var(--color-cyan);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #182a3a;
+      padding-bottom: 6px;
+    }
+
+    .reinforce-block {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .reinforce-label {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      color: var(--color-green);
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    .reinforce-text {
+      font-size: 0.88rem;
+      line-height: 1.45;
+      color: var(--text-main);
+    }
+
+    .reinforce-box-warn {
+      background: rgba(255, 51, 102, 0.08);
+      border-left: 3px solid var(--color-red);
+      padding: 8px 10px;
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    }
+
+    .reinforce-box-def {
+      background: rgba(0, 255, 102, 0.08);
+      border-left: 3px solid var(--color-green);
+      padding: 8px 10px;
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    }
+
+    .modal-actions {
+      padding: 14px 18px;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      background: rgba(10, 16, 24, 0.5);
+    }
+
+    .primary-btn {
+      background: var(--color-green);
+      color: var(--bg-deep);
+      border: none;
+      padding: 10px 18px;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-mono);
+      font-weight: 800;
+      font-size: 0.88rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+      box-shadow: 0 0 12px var(--color-green-glow);
+    }
+
+    .primary-btn:hover {
+      background: #33ff85;
+      box-shadow: 0 0 20px rgba(0, 255, 102, 0.7);
+      transform: translateY(-1px);
+    }
+
+    .secondary-btn {
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid var(--border-color);
+      padding: 10px 16px;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-mono);
+      font-size: 0.84rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .secondary-btn:hover {
+      color: var(--text-main);
+      border-color: var(--text-muted);
+    }
+
+    /* Modal de Nivel Completado */
+    .victory-score-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin: 8px 0;
+    }
+
+    .score-card {
+      background: #0d1a26;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .score-val {
+      font-family: var(--font-mono);
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: var(--color-cyan);
+    }
+
+    .score-lbl {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    /* Drawer de Niveles y Glosario */
+    .drawer-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px;
+      background: #0d1824;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .drawer-item:hover {
+      border-color: var(--color-cyan);
+      background: #112233;
+    }
+
+    .drawer-item.active {
+      border-color: var(--color-green);
+      background: rgba(0, 255, 102, 0.08);
+    }
+
+    .drawer-item.locked {
+      opacity: 0.5;
+      cursor: not-allowed;
+      border-color: var(--border-color);
+    }
+
+    /* ==========================================================================
+       7. MEJORAS DE ACCESIBILIDAD TÁCTIL (POINTER COARSE)
+       Área táctil mínima de 44x44px recomendada por WCAG y Apple HIG
+       ========================================================================== */
+    @media (pointer: coarse) {
+      .icon-btn {
+        min-width: 44px;
+        min-height: 44px;
+        width: 44px;
+        height: 44px;
+      }
+
+      .clue-nav-btn {
+        min-width: 44px;
+        min-height: 44px;
+        width: 44px;
+        height: 44px;
+        font-size: 0.9rem;
+      }
+
+      .tool-btn {
+        min-height: 44px;
+        padding: 0.65rem 0.85rem;
+      }
+
+      .letter-tile {
+        min-width: 44px;
+        min-height: 46px;
+      }
+
+      .primary-btn {
+        min-height: 44px;
+        padding: 0.75rem 1.25rem;
+      }
+
+      .secondary-btn {
+        min-height: 44px;
+        padding: 0.75rem 1rem;
+      }
+
+      .drawer-item {
+        min-height: 48px;
+        padding: 0.85rem 1rem;
+      }
+
+      .stat-badge {
+        min-height: 38px;
+        padding: 0.35rem 0.65rem;
+      }
+    }
+
+    /* ==========================================================================
+       8. RESPONSIVIDAD: MÓVIL (HASTA 600PX), TABLET Y ESCRITORIO
+       ========================================================================== */
+    /* Móvil (hasta 600px) */
+    @media (max-width: 600px) {
+      :root {
+        --cell-size: clamp(1.85rem, 6.8vw, 2.35rem);
+      }
+
+      #app-container {
+        border-left: none;
+        border-right: none;
+        box-shadow: none;
+      }
+
+      .hud-stats {
+        gap: 0.35rem;
+      }
+
+      .stat-badge {
+        padding: 0.25rem 0.45rem;
+        font-size: 0.72rem;
+      }
+
+      .clue-panel {
+        padding: 0.65rem 0.85rem;
+      }
+
+      .clue-header {
+        font-size: 0.68rem;
+      }
+
+      .clue-text {
+        font-size: var(--font-clue);
+        min-height: 2.35rem;
+      }
+
+      .board-wrapper {
+        padding: 0.4rem;
+      }
+
+      .crossword-grid {
+        gap: 3px;
+        padding: 0.4rem;
+      }
+
+      .cyber-modal {
+        max-width: calc(100vw - 1.25rem);
+        margin: 0 auto;
+      }
+
+      .modal-content {
+        padding: 1rem;
+      }
+    }
+
+    /* Tablet (601px a 1024px) */
+    @media (min-width: 601px) and (max-width: 1024px) {
+      :root {
+        --max-width: 38rem;
+        --cell-size: 2.6rem;
+      }
+
+      .board-wrapper {
+        padding: 1.25rem;
+      }
+
+      .input-tools {
+        max-width: 25rem;
+      }
+
+      .letter-wheel-container {
+        max-width: 25rem;
+      }
+    }
+
+    /* Escritorio (1025px o más) */
+    @media (min-width: 1025px) {
+      :root {
+        --max-width: 36rem;
+        --cell-size: 2.5rem;
+      }
+
+      body {
+        justify-content: center;
+      }
+
+      #app-container {
+        min-height: 94vh;
+        min-height: 94dvh;
+        margin: 3vh 0;
+        margin: 3dvh 0;
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        border: 1px solid var(--border-color);
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- CONTENEDOR PRINCIPAL DE LA PWA -->
+  <main id="app-container">
+
+    <!-- 1. HUD SUPERIOR CON ESTADO, REP Y HERRAMIENTAS -->
+    <header class="cyber-hud">
+      <div class="hud-brand" id="btn-brand" title="CyberCross">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <path d="M9 12l2 2 4-4"/>
+        </svg>
+        <span class="hud-title">CYBER<span>CROSS</span></span>
+      </div>
+
+      <div class="hud-stats">
+        <div class="stat-badge level" id="btn-open-levels" title="Cambiar de Nivel">
+          <span>LVL</span>
+          <span id="hud-level-num">01</span>
+        </div>
+        <div class="stat-badge rep" title="Puntos de Reputación">
+          <span>⚡</span>
+          <span id="hud-rep-val">100</span>
+        </div>
+      </div>
+
+      <div class="hud-actions">
+        <button class="icon-btn" id="btn-toggle-sound" title="Alternar Sonido">
+          <span id="sound-icon">🔊</span>
+        </button>
+        <button class="icon-btn" id="btn-open-cards" title="Glosario & Tarjetas de Refuerzo" style="position:relative;">
+          <span>🛡️</span>
+          <span class="badge-count" id="cards-count-badge">0</span>
+        </button>
+        <button class="icon-btn" id="btn-open-settings" title="Ajustes del Sistema">
+          <span>⚙️</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- 2. BANNER DE PISTA ACTIVA -->
+    <section class="clue-panel" aria-label="Pista de la palabra activa">
+      <div class="clue-header">
+        <div class="clue-tag">
+          <span class="dir-icon" id="clue-dir-icon">➔</span>
+          <span id="clue-word-index">PALABRA 1</span>
+          <span style="color:var(--text-muted)">•</span>
+          <span id="clue-word-len">[7 LETRAS]</span>
+        </div>
+        <div class="clue-nav">
+          <button class="clue-nav-btn" id="btn-prev-clue" title="Palabra Anterior">◀</button>
+          <button class="clue-nav-btn" id="btn-next-clue" title="Palabra Siguiente">▶</button>
+        </div>
+      </div>
+
+      <div class="clue-text" id="clue-display-text">
+        Cargando sistema criptográfico...
+      </div>
+
+      <!-- Letras descubiertas en la palabra seleccionada -->
+      <div class="word-progress-slots" id="clue-slots-container"></div>
+    </section>
+
+    <!-- 3. TABLERO DE CRUCIGRAMA -->
+    <section class="board-wrapper" id="board-scroll-area">
+      <div class="crossword-grid" id="crossword-grid" role="grid">
+        <!-- Renderizado dinámico vía JavaScript -->
+      </div>
+    </section>
+
+    <!-- 4. ENTRADA MEDIANTE RUEDA DE LETRAS DESORDENADAS -->
+    <section class="input-section" aria-label="Rueda de entrada de letras">
+      <div class="input-tools">
+        <button class="tool-btn hint-btn" id="btn-hint" title="Revelar letra">
+          <span id="txt-btn-hint-label">💡 PISTA</span>
+          <span class="hint-cost-pill" id="hint-status-pill">3 GRATIS</span>
+        </button>
+
+        <button class="tool-btn" id="btn-shuffle" title="Barajar letras desordenadas">
+          <span id="txt-btn-shuffle-label">🔀 BARAJAR</span>
+        </button>
+
+        <button class="tool-btn" id="btn-backspace" title="Borrar letra">
+          <span id="txt-btn-backspace-label">⌫ BORRAR</span>
+        </button>
+      </div>
+
+      <!-- Rueda de Letras Interactivas -->
+      <div class="letter-wheel-container" id="letter-wheel">
+        <!-- Generado dinámicamente según la palabra activa -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ========================================================================
+       5. MODAL DE TARJETA DE REFUERZO COGNITIVO (EVALUACIÓN INVISIBLE)
+       ======================================================================== -->
+  <div class="modal-backdrop" id="modal-reinforce" role="dialog" aria-modal="true">
+    <div class="cyber-modal">
+      <div class="modal-banner warn">
+        <div class="modal-title warn">
+          <span>⚠️</span> <span id="txt-ref-modal-title">PROTOCOLO DE REFUERZO COGNITIVO</span>
+        </div>
+      </div>
+      <div class="modal-content">
+        <p style="font-size: 0.85rem; color: var(--text-muted);" id="txt-ref-modal-desc">
+          El sistema de ciberseguridad detectó intentos fallidos o uso elevado de pistas. Analiza el siguiente concepto para afianzar tu conocimiento:
+        </p>
+
+        <div class="reinforce-card">
+          <div class="reinforce-term" id="ref-card-title">MALWARE</div>
+          
+          <div class="reinforce-block">
+            <span class="reinforce-label" id="txt-ref-label-def">Definición Operativa:</span>
+            <div class="reinforce-text" id="ref-card-def">...</div>
+          </div>
+
+          <div class="reinforce-block">
+            <span class="reinforce-label" style="color:var(--color-red);" id="txt-ref-label-scenario">Vector de Ataque / Escenario Real:</span>
+            <div class="reinforce-text reinforce-box-warn" id="ref-card-scenario">...</div>
+          </div>
+
+          <div class="reinforce-block">
+            <span class="reinforce-label" style="color:var(--color-green);" id="txt-ref-label-defense">Medida Defensiva / Mitigación:</span>
+            <div class="reinforce-text reinforce-box-def" id="ref-card-defense">...</div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="primary-btn" id="btn-close-reinforce">
+          <span id="txt-ref-btn-continue">ENTENDIDO: CONTINUAR</span> ➔
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       6. MODAL DE NIVEL COMPLETADO (VICTORIA)
+       ======================================================================== -->
+  <div class="modal-backdrop" id="modal-victory" role="dialog" aria-modal="true">
+    <div class="cyber-modal">
+      <div class="modal-banner">
+        <div class="modal-title">
+          <span>🛡️</span> <span id="txt-vic-modal-title">NIVEL DESENCRIPTADO CON ÉXITO</span>
+        </div>
+      </div>
+      <div class="modal-content">
+        <p style="font-size:0.9rem; text-align:center; color:var(--color-cyan);" id="victory-level-subtitle">
+          NIVEL 01: Perímetro y Amenazas Básicas
+        </p>
+
+        <div class="victory-score-grid">
+          <div class="score-card">
+            <span class="score-val" id="vic-score-rep">+50</span>
+            <span class="score-lbl" id="txt-vic-rep-lbl">Reputación Ganada</span>
+          </div>
+          <div class="score-card">
+            <span class="score-val" id="vic-score-hints">0</span>
+            <span class="score-lbl" id="txt-vic-hints-lbl">Pistas Utilizadas</span>
+          </div>
+        </div>
+
+        <p style="font-size:0.82rem; color:var(--text-muted); text-align:center;" id="txt-vic-desc">
+          Has fortalecido tus defensas cognitivas. El cortafuegos está listo para el siguiente desafío.
+        </p>
+      </div>
+      <div class="modal-actions">
+        <button class="primary-btn" id="btn-next-level">
+          <span id="txt-btn-next-level">SIGUIENTE NIVEL</span> ➔
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       7. MODAL SELECTOR DE NIVELES (1 - 100)
+       ======================================================================== -->
+  <div class="modal-backdrop" id="modal-levels" role="dialog" aria-modal="true">
+    <div class="cyber-modal">
+      <div class="modal-banner">
+        <div class="modal-title">
+          <span>📂</span> <span id="txt-levels-modal-title">MATRIZ DE NIVELES (1 - 100)</span>
+        </div>
+        <button class="icon-btn" id="btn-close-levels-modal" style="width:28px;height:28px;">✕</button>
+      </div>
+      <div class="modal-content" id="levels-list-container">
+        <!-- Renderizado dinámico -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       8. MODAL DE BIBLIOTECA DE TARJETAS DE REFUERZO (DOSSIER)
+       ======================================================================== -->
+  <div class="modal-backdrop" id="modal-dossier" role="dialog" aria-modal="true">
+    <div class="cyber-modal">
+      <div class="modal-banner">
+        <div class="modal-title">
+          <span>🛡️</span> <span id="txt-dossier-modal-title">GLOSARIO DE REFUERZO</span>
+        </div>
+        <button class="icon-btn" id="btn-close-dossier-modal" style="width:28px;height:28px;">✕</button>
+      </div>
+      <div class="modal-content" id="dossier-cards-container">
+        <!-- Renderizado dinámico -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       8B. MODAL DE AJUSTES DEL SISTEMA (CONFIGURACIÓN)
+       ======================================================================== -->
+  <div class="modal-backdrop" id="modal-settings" role="dialog" aria-modal="true">
+    <div class="cyber-modal">
+      <div class="modal-banner">
+        <div class="modal-title">
+          <span>⚙️</span> <span id="txt-settings-title">AJUSTES DEL SISTEMA</span>
+        </div>
+        <button class="icon-btn" id="btn-close-settings-modal" style="width:28px;height:28px;">✕</button>
+      </div>
+      <div class="modal-content">
+        <div style="margin-bottom:18px;">
+          <label style="display:block;font-size:0.8rem;color:var(--color-cyan);margin-bottom:8px;font-family:var(--font-mono);font-weight:bold;" id="txt-settings-lang-lbl">IDIOMA / LANGUAGE</label>
+          <div style="display:flex;gap:10px;">
+            <button class="tool-btn" id="btn-lang-es" style="flex:1;justify-content:center;padding:10px;border-radius:var(--radius-sm);">
+              <span>🇪🇸</span> Español
+            </button>
+            <button class="tool-btn" id="btn-lang-en" style="flex:1;justify-content:center;padding:10px;border-radius:var(--radius-sm);">
+              <span>🇺🇸</span> English (US)
+            </button>
+          </div>
+        </div>
+
+        <div style="margin-bottom:12px;">
+          <label style="display:block;font-size:0.8rem;color:var(--color-cyan);margin-bottom:8px;font-family:var(--font-mono);font-weight:bold;" id="txt-settings-sound-lbl">AUDIO Y EFECTOS</label>
+          <button class="tool-btn" id="btn-settings-toggle-sound" style="width:100%;justify-content:center;padding:10px;border-radius:var(--radius-sm);">
+            <span id="txt-settings-sound-state">🔊 Efectos de sonido activados</span>
+          </button>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="primary-btn" id="btn-close-settings-action">
+          <span id="txt-settings-close-btn">CERRAR</span> ➔
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="translations.js"></script>
+  <script>
+    /**
+     * CYBERCROSS - MOTOR DE CRUCIGRAMA Y PWA
+     * Desarrollado en JavaScript Vanilla puro (ES6+), sin librerías externas.
+     * Persistencia nativa con localStorage y síntesis de sonido con Web Audio API.
+     */
+
+    /* ==========================================================================
+       10. BASE DE DATOS ESTRUCTURADA DE NIVELES (JSON ESTÁTICO EMBEBIDO)
+       --------------------------------------------------------------------------
+       GUÍA PARA EXTENDER DEL NIVEL 6 AL 100:
+       - Cada nivel tiene un 'id', 'name', 'theme', 'difficulty' ('Básico' 1-30,
+         'Intermedio' 31-70, 'Avanzado' 71-100).
+       - 'words': Lista de palabras con posición calculada (x, y), dirección
+         ('H' para horizontal, 'V' para vertical), pista ('clue') y el objeto
+         'reinforce' para la tarjeta de refuerzo pedagógico.
+       - REGLA DE ORO DE REPETICIÓN: Ninguna palabra debe exceder 3 apariciones
+         en los 100 niveles.
+       ========================================================================== */
+    const CYBER_LEVELS = [
+      {
+        id: 1,
+        name: "Nivel 01",
+        theme: "Perímetro y Amenazas Básicas",
+        difficulty: "Básico",
+        words: [
+          {
+            id: "w1",
+            word: "MALWARE",
+            clue: "Software malicioso diseñado para infiltrarse, alterar o dañar un sistema informático sin el consentimiento del usuario.",
+            x: 0,
+            y: 2,
+            dir: "H",
+            reinforce: {
+              title: "MALWARE (Software Malicioso)",
+              def: "Término paraguas que describe virus, gusanos, troyanos o cualquier código creado intencionalmente para comprometer la confidencialidad, integridad o disponibilidad de un sistema.",
+              scenario: "Descarga involuntaria al hacer clic en adjuntos sospechosos o software crackeado desde sitios web no oficiales.",
+              defense: "Instalar soluciones antivirus/EDR en tiempo real, mantener el sistema operativo parchado y nunca ejecutar programas desconocidos."
+            }
+          },
+          {
+            id: "w2",
+            word: "FIREWALL",
+            clue: "Sistema de defensa perimetral que inspecciona y filtra el tráfico de red entrante y saliente según políticas de seguridad.",
+            x: 5,
+            y: 0,
+            dir: "V",
+            reinforce: {
+              title: "FIREWALL (Cortafuegos)",
+              def: "Dispositivo o software que opera en las fronteras de red aplicando reglas de filtrado de paquetes basadas en IP, puertos y protocolos.",
+              scenario: "Un atacante remoto intenta escanear puertos abiertos de tu equipo para conectarse a un servicio vulnerable sin autenticación.",
+              defense: "Aplicar la regla de denegación predeterminada (Default Deny): bloquear todo el tráfico salvo el estrictamente autorizado."
+            }
+          },
+          {
+            id: "w3",
+            word: "BACKUP",
+            clue: "Copia de seguridad periódica de la información crítica que permite recuperarla ante fallos, pérdidas o ciberataques.",
+            x: 4,
+            y: 5,
+            dir: "H",
+            reinforce: {
+              title: "BACKUP (Copia de Respaldo)",
+              def: "Duplicación programada de bases de datos y archivos en medios aislados para asegurar la continuidad de negocio ante desastres.",
+              scenario: "Un ataque de ransomware cifra por completo los discos duros de la organización exigiendo un rescate millonario.",
+              defense: "Aplicar la regla 3-2-1: 3 copias de los datos, en 2 medios de almacenamiento diferentes, con 1 copia fuera de línea (air-gap)."
+            }
+          }
+        ]
+      },
+      {
+        id: 2,
+        name: "Nivel 02",
+        theme: "Ingeniería Social e Identidad",
+        difficulty: "Básico",
+        words: [
+          {
+            id: "w1",
+            word: "PHISHING",
+            clue: "Técnica de engaño que suplanta la identidad de organizaciones de confianza para inducir a la víctima a revelar contraseñas.",
+            x: 2,
+            y: 3,
+            dir: "H",
+            reinforce: {
+              title: "PHISHING (Suplantación de Identidad)",
+              def: "Ataque psicológico basado en urgencia, miedo o recompensa, donde el remitente falsifica correos o mensajes para robar credenciales bancarias o corporativas.",
+              scenario: "Un correo con el logo idéntico a tu banco alertando que 'tu cuenta será suspendida si no confirmas tu contraseña en este enlace'.",
+              defense: "Inspeccionar el dominio del remitente, nunca hacer clic en enlaces de alerta bancaria y habilitar autenticación multifactor (2FA)."
+            }
+          },
+          {
+            id: "w2",
+            word: "PASSWORD",
+            clue: "Cadena de caracteres secreta que valida la identidad de un usuario frente a un sistema de control de acceso.",
+            x: 5,
+            y: 0,
+            dir: "V",
+            reinforce: {
+              title: "PASSWORD (Contraseña)",
+              def: "Mecanismo elemental de autenticación basado en conocimiento ('algo que sabes'). Su seguridad depende de su longitud, entropía y confidencialidad.",
+              scenario: "Reutilizar contraseñas cortas o predecibles ('admin123') en múltiples plataformas. Si un servicio se filtra, caen todas las cuentas.",
+              defense: "Utilizar frases de contraseña (passphrases) de al menos 14 caracteres con gestores de contraseñas seguros y sin reutilización."
+            }
+          },
+          {
+            id: "w3",
+            word: "HACKER",
+            clue: "Individuo con profundos conocimientos informáticos que explora la arquitectura, vulnerabilidades y límites de los sistemas.",
+            x: 0,
+            y: 6,
+            dir: "H",
+            reinforce: {
+              title: "HACKER (Ético vs Malicioso)",
+              def: "Especialista técnico capaz de comprender sistemas a bajo nivel. Los 'White Hat' (hackers éticos) ayudan a proteger sistemas encontrando fallos antes que los criminales.",
+              scenario: "Un investigador de seguridad descubre una vulnerabilidad crítica de inyección SQL y la reporta responsablemente a la empresa.",
+              defense: "Contratar pruebas de penetración periódicas (pentesting) e implementar políticas de divulgación responsable de vulnerabilidades."
+            }
+          }
+        ]
+      },
+      {
+        id: 3,
+        name: "Nivel 03",
+        theme: "Amenazas Criptográficas y Camuflaje",
+        difficulty: "Básico",
+        words: [
+          {
+            id: "w1",
+            word: "RANSOMWARE",
+            clue: "Tipo de malware que secuestra y cifra los archivos de la víctima, exigiendo un pago económico para proporcionar la clave de descifrado.",
+            x: 0,
+            y: 1,
+            dir: "H",
+            reinforce: {
+              title: "RANSOMWARE (Secuestro de Datos)",
+              def: "Código dañino que ejecuta algoritmos criptográficos asimétricos para bloquear el acceso a documentos y servidores empresariales con fines extorsivos.",
+              scenario: "Un archivo de Word malicioso con macros ejecutadas cifra instantáneamente la carpeta compartida de un hospital.",
+              defense: "Copias de seguridad inmutables fuera de la red local, restricción de ejecución de macros y segmentación estricta de subredes."
+            }
+          },
+          {
+            id: "w2",
+            word: "ENCRIPTAR",
+            clue: "Proceso criptográfico que transforma información legible en texto cifrado ininteligible mediante una clave y un algoritmo.",
+            x: 2,
+            y: 0,
+            dir: "V",
+            reinforce: {
+              title: "ENCRIPTAR / CIFRAR",
+              def: "Aplicación de matemáticas criptográficas (AES, RSA) para garantizar la confidencialidad absoluta de la información en reposo y en tránsito.",
+              scenario: "El robo físico de una computadora portátil empresarial sin cifrado de disco permite a los ladrones extraer datos sensibles sin contraseña.",
+              defense: "Habilitar cifrado total de disco (BitLocker / FileVault) y requerir HTTPS/TLS en todas las comunicaciones en la web."
+            }
+          },
+          {
+            id: "w3",
+            word: "TROYANO",
+            clue: "Software malintencionado que se presenta como una aplicación legítima o inofensiva para engañar al usuario e instalar puertas traseras.",
+            x: 2,
+            y: 6,
+            dir: "H",
+            reinforce: {
+              title: "CABALLO DE TROYANO",
+              def: "Malware que camufla su verdadera naturaleza destructiva bajo la fachada de un software útil (ej. un juego, parche o visor de PDF).",
+              scenario: "Descarga de un 'crack' de software que, además de activar el programa, instala un backdoor de acceso remoto (RAT) para el atacante.",
+              defense: "Descargar aplicaciones exclusivamente desde repositorios y tiendas oficiales verificadas, validando siempre hashes criptográficos."
+            }
+          }
+        ]
+      },
+      {
+        id: 4,
+        name: "Nivel 04",
+        theme: "Vectores de Infección y Redes Zombi",
+        difficulty: "Básico",
+        words: [
+          {
+            id: "w1",
+            word: "EXPLOIT",
+            clue: "Fragmento de software, comando o prueba de concepto creada específicamente para aprovechar una falla de seguridad en un sistema.",
+            x: 0,
+            y: 2,
+            dir: "H",
+            reinforce: {
+              title: "EXPLOIT (Aprovechamiento de Falla)",
+              def: "Código que saca provecho de un bug de software (como un desbordamiento de búfer) para alterar el flujo del programa o tomar control del sistema.",
+              scenario: "Envío de paquetes de red manipulados a un servidor web sin parchar para forzar la ejecución remota de comandos de administrador.",
+              defense: "Gestión proactiva de parches de seguridad y utilización de tecnologías de mitigación en compiladores (ASLR, DEP)."
+            }
+          },
+          {
+            id: "w2",
+            word: "SPYWARE",
+            clue: "Programa malicioso que recopila de manera encubierta información privada y hábitos de navegación del usuario para remitirlos a un atacante.",
+            x: 2,
+            y: 1,
+            dir: "V",
+            reinforce: {
+              title: "SPYWARE (Software Espía)",
+              def: "Malware centrado en el sigilo para capturar pulsaciones de teclado (keyloggers), credenciales almacenadas o actividad de pantalla sin levantar sospechas.",
+              scenario: "Una extensión no autorizada del navegador lee silenciosamente los números de tarjeta ingresados en tiendas virtuales.",
+              defense: "Auditar periódicamente las extensiones del navegador y revocar permisos excesivos a aplicaciones en dispositivos móviles y de escritorio."
+            }
+          },
+          {
+            id: "w3",
+            word: "BOTNET",
+            clue: "Red de dispositivos zombis infectados que son coordinados y controlados remotamente por un atacante para lanzar ciberataques.",
+            x: 6,
+            y: 0,
+            dir: "V",
+            reinforce: {
+              title: "BOTNET (Red Zombi)",
+              def: "Agrupación masiva de computadoras, servidores o dispositivos IoT comprometidos que obedecen comandos de un servidor Command and Control (C2).",
+              scenario: "Millones de cámaras web inteligentes con claves de fábrica son usadas para saturar con tráfico basura los servidores de una entidad bancaria (DDoS).",
+              defense: "Cambiar siempre las credenciales predeterminadas en dispositivos IoT y segmentarlos en redes virtuales (VLANs) aisladas."
+            }
+          }
+        ]
+      },
+      {
+        id: 5,
+        name: "Nivel 05",
+        theme: "Defensa Activa y Autenticación",
+        difficulty: "Básico",
+        words: [
+          {
+            id: "w1",
+            word: "HONEYPOT",
+            clue: "Sistema trampa o señuelo configurado intencionalmente para atraer a atacantes, detectar intrusiones y analizar sus tácticas.",
+            x: 0,
+            y: 0,
+            dir: "H",
+            reinforce: {
+              title: "HONEYPOT (Tarro de Miel)",
+              def: "Recurso informático señuelo sin actividad productiva real. Cualquier intento de conexión entrante es catalogado como una actividad maliciosa sospechosa.",
+              scenario: "Un servidor falso expuesto con supuestos datos financieros registra las técnicas y herramientas de penetración de los atacantes.",
+              defense: "Implementar honeypots en subredes internas para detectar movimientos laterales tempranos antes de que alcancen los servidores reales."
+            }
+          },
+          {
+            id: "w2",
+            word: "PARCHE",
+            clue: "Actualización de código liberada por un fabricante para corregir vulnerabilidades o bugs de seguridad en un software.",
+            x: 5,
+            y: 0,
+            dir: "V",
+            reinforce: {
+              title: "PARCHE DE SEGURIDAD",
+              def: "Modificación de software liberada para subsanar debilidades de código antes de que sean explotadas por actores maliciosos.",
+              scenario: "Se descubre una vulnerabilidad crítica día cero. Los sistemas que no instalen el parche de emergencia en 48 horas serán atacados por bots.",
+              defense: "Disponer de un proceso automatizado de evaluación e implementación de actualizaciones de seguridad críticas."
+            }
+          },
+          {
+            id: "w3",
+            word: "TOKEN",
+            clue: "Dispositivo o código digital temporal de un solo uso empleado como segundo factor de autenticación (2FA) para verificar identidades.",
+            x: 7,
+            y: 0,
+            dir: "V",
+            reinforce: {
+              title: "TOKEN DE AUTENTICACIÓN",
+              def: "Elemento de seguridad basado en posesión ('algo que tienes'). Genera códigos dinámicos basados en tiempo (TOTP) para impedir accesos ilegítimos.",
+              scenario: "Un atacante obtiene tu contraseña mediante una filtración, pero no puede acceder porque el sistema le exige el código dinámico de tu token.",
+              defense: "Requerir autenticación multifactor (MFA/2FA) en todas las cuentas mediante apps autenticadoras o llaves físicas de seguridad (FIDO2)."
+            }
+          }
+        ]
+      }
+    ];
+
+    /* ==========================================================================
+       11. SINTETIZADOR DE AUDIO RETRO HACKER (WEB AUDIO API)
+       --------------------------------------------------------------------------
+       Genera efectos sonoros 100% nativos mediante osciladores matemáticos,
+       garantizando cero descargas de audio y funcionamiento offline perfecto.
+       ========================================================================== */
+    class CyberAudio {
+      constructor() {
+        this.ctx = null;
+        this.isMuted = localStorage.getItem('cybercross_muted') === 'true';
+      }
+
+      initContext() {
+        if (!this.ctx) {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (AudioContextClass) {
+            this.ctx = new AudioContextClass();
+          }
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+
+      playTone(freq, type = 'sine', duration = 0.08, gainVal = 0.15) {
+        if (this.isMuted) return;
+        this.initContext();
+        if (!this.ctx) return;
+
+        try {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+
+          osc.type = type;
+          osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+
+          gain.gain.setValueAtTime(gainVal, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+
+          osc.start();
+          osc.stop(this.ctx.currentTime + duration);
+        } catch (e) {
+          console.warn("Audio play prevented:", e);
+        }
+      }
+
+      // Tipeo de letra (blip suave)
+      playKeyTap() {
+        this.playTone(440, 'sine', 0.04, 0.1);
+      }
+
+      // Deshacer / Borrar (blip bajo)
+      playBackspace() {
+        this.playTone(220, 'triangle', 0.05, 0.08);
+      }
+
+      // Error / Palabra incorrecta (buzz de glitch)
+      playError() {
+        if (this.isMuted) return;
+        this.initContext();
+        if (!this.ctx) return;
+
+        try {
+          const now = this.ctx.currentTime;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(140, now);
+          osc.frequency.linearRampToValueAtTime(80, now + 0.25);
+
+          gain.gain.setValueAtTime(0.2, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+
+          osc.start(now);
+          osc.stop(now + 0.25);
+        } catch (e) {}
+      }
+
+      // Palabra descubierta con éxito (acorde mayor cyber arpegiado)
+      playWordSuccess() {
+        if (this.isMuted) return;
+        const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+        notes.forEach((freq, idx) => {
+          setTimeout(() => {
+            this.playTone(freq, 'triangle', 0.16, 0.18);
+          }, idx * 60);
+        });
+      }
+
+      // Revelar letra con pista (glissando digital)
+      playHintDecrypted() {
+        if (this.isMuted) return;
+        this.initContext();
+        if (!this.ctx) return;
+
+        try {
+          const now = this.ctx.currentTime;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(300, now);
+          osc.frequency.exponentialRampToValueAtTime(1200, now + 0.18);
+
+          gain.gain.setValueAtTime(0.15, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+
+          osc.start(now);
+          osc.stop(now + 0.2);
+        } catch (e) {}
+      }
+
+      // Fanfarria de Nivel Completado
+      playLevelComplete() {
+        if (this.isMuted) return;
+        const sequence = [
+          { f: 523.25, d: 0.1 },  // C5
+          { f: 659.25, d: 0.1 },  // E5
+          { f: 783.99, d: 0.1 },  // G5
+          { f: 1046.50, d: 0.25 }, // C6
+          { f: 880.00, d: 0.1 },  // A5
+          { f: 1046.50, d: 0.4 }  // C6 sostenido
+        ];
+
+        let delay = 0;
+        sequence.forEach(item => {
+          setTimeout(() => {
+            this.playTone(item.f, 'triangle', item.d, 0.22);
+          }, delay);
+          delay += item.d * 1000 + 40;
+        });
+      }
+
+      toggleMute() {
+        this.isMuted = !this.isMuted;
+        localStorage.setItem('cybercross_muted', this.isMuted);
+        return this.isMuted;
+      }
+    }
+
+    /* ==========================================================================
+       12. MOTOR DEL CRUCIGRAMA & ESTADO DEL JUEGO
+       ========================================================================== */
+    class CyberCrossEngine {
+      constructor() {
+        this.audio = new CyberAudio();
+        
+        // Estado persistente restaurado automáticamente con esquema versionado
+        const savedProgress = this.loadSavedProgress();
+        this.currentLevelIndex = savedProgress.currentLevelIndex;
+        this.reputation = savedProgress.reputation;
+        this.freeHints = savedProgress.freeHints;
+        this.unlockedCards = savedProgress.unlockedCards;
+        this.completedLevels = savedProgress.completedLevels;
+
+        // Idioma activo independiente del progreso
+        this.currentLang = this.loadSavedLanguage();
+
+        // Estado del nivel en curso
+        this.currentLevel = null;
+        this.activeWordId = null;
+        this.activeCellKey = null; // "x,y"
+        this.gridCells = {};       // mapa de celdas por clave "x,y"
+        this.gridBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+        this.scrambledLetters = [];
+
+        // Métrica de evaluación invisible por nivel
+        this.mistakesPerWord = {};
+        this.hintsPerWord = {};
+
+        // Caché de elementos del DOM
+        this.dom = {
+          hudLevel: document.getElementById('hud-level-num'),
+          hudRep: document.getElementById('hud-rep-val'),
+          soundIcon: document.getElementById('sound-icon'),
+          cardsBadge: document.getElementById('cards-count-badge'),
+          clueDirIcon: document.getElementById('clue-dir-icon'),
+          clueWordIndex: document.getElementById('clue-word-index'),
+          clueWordLen: document.getElementById('clue-word-len'),
+          clueText: document.getElementById('clue-display-text'),
+          clueSlots: document.getElementById('clue-slots-container'),
+          grid: document.getElementById('crossword-grid'),
+          letterWheel: document.getElementById('letter-wheel'),
+          hintStatusPill: document.getElementById('hint-status-pill'),
+          // Modales
+          modalReinforce: document.getElementById('modal-reinforce'),
+          refCardTitle: document.getElementById('ref-card-title'),
+          refCardDef: document.getElementById('ref-card-def'),
+          refCardScenario: document.getElementById('ref-card-scenario'),
+          refCardDefense: document.getElementById('ref-card-defense'),
+          btnCloseReinforce: document.getElementById('btn-close-reinforce'),
+          modalVictory: document.getElementById('modal-victory'),
+          vicSubtitle: document.getElementById('victory-level-subtitle'),
+          vicRep: document.getElementById('vic-score-rep'),
+          vicHints: document.getElementById('vic-score-hints'),
+          btnNextLevel: document.getElementById('btn-next-level'),
+          modalLevels: document.getElementById('modal-levels'),
+          levelsList: document.getElementById('levels-list-container'),
+          modalDossier: document.getElementById('modal-dossier'),
+          dossierList: document.getElementById('dossier-cards-container')
+        };
+
+        this.initEventListeners();
+        this.applyLanguage();
+        this.updateHUD();
+        this.startLevel(this.currentLevelIndex);
+      }
+
+      loadSavedLevel() {
+        return this.loadSavedProgress().currentLevelIndex;
+      }
+
+      loadSavedProgress() {
+        const defaultState = {
+          currentLevelIndex: 0,
+          reputation: 100,
+          freeHints: 3,
+          unlockedCards: [],
+          completedLevels: []
+        };
+
+        try {
+          const raw = localStorage.getItem('cybercrossword-progress-v1');
+          if (!raw) {
+            // Compatibilidad hacia atrás si existían claves legacy previas
+            const legacyLevel = localStorage.getItem('cybercross_current_lvl');
+            if (legacyLevel !== null) {
+              const parsedLevel = parseInt(legacyLevel, 10);
+              return {
+                currentLevelIndex: (parsedLevel >= 0 && parsedLevel < CYBER_LEVELS.length) ? parsedLevel : 0,
+                reputation: parseInt(localStorage.getItem('cybercross_rep') || '100', 10),
+                freeHints: parseInt(localStorage.getItem('cybercross_free_hints') || '3', 10),
+                unlockedCards: JSON.parse(localStorage.getItem('cybercross_cards') || '[]'),
+                completedLevels: JSON.parse(localStorage.getItem('cybercross_completed') || '[]')
+              };
+            }
+            return defaultState;
+          }
+
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object') {
+            const lvl = (typeof parsed.currentLevelIndex === 'number' && parsed.currentLevelIndex >= 0 && parsed.currentLevelIndex < CYBER_LEVELS.length)
+              ? parsed.currentLevelIndex
+              : 0;
+            const rep = (typeof parsed.reputation === 'number' && !isNaN(parsed.reputation)) ? parsed.reputation : 100;
+            const hints = (typeof parsed.freeHints === 'number' && !isNaN(parsed.freeHints)) ? parsed.freeHints : 3;
+            const cards = Array.isArray(parsed.unlockedCards) ? parsed.unlockedCards : [];
+            const completed = Array.isArray(parsed.completedLevels) ? parsed.completedLevels : [];
+
+            return {
+              currentLevelIndex: lvl,
+              reputation: rep,
+              freeHints: hints,
+              unlockedCards: cards,
+              completedLevels: completed
+            };
+          }
+        } catch (err) {
+          console.warn('[CyberCross] Error al leer progreso desde localStorage:', err);
+        }
+
+        return defaultState;
+      }
+
+      saveGameState() {
+        try {
+          const payload = {
+            version: 1,
+            currentLevelIndex: this.currentLevelIndex,
+            completedLevels: this.completedLevels,
+            reputation: this.reputation,
+            freeHints: this.freeHints,
+            unlockedCards: this.unlockedCards,
+            timestamp: Date.now()
+          };
+          localStorage.setItem('cybercrossword-progress-v1', JSON.stringify(payload));
+        } catch (err) {
+          console.warn('[CyberCross] Error al guardar progreso en localStorage:', err);
+        }
+      }
+
+      loadSavedLanguage() {
+        try {
+          const savedLang = localStorage.getItem('cybercrossword-lang');
+          if (savedLang === 'en' || savedLang === 'es') {
+            return savedLang;
+          }
+        } catch (e) {
+          console.warn('[CyberCross] Error leyendo idioma:', e);
+        }
+        return 'es';
+      }
+
+      setLanguage(lang) {
+        if (lang !== 'es' && lang !== 'en') return;
+        this.currentLang = lang;
+        try {
+          localStorage.setItem('cybercrossword-lang', lang);
+        } catch (e) {
+          console.warn('[CyberCross] Error guardando idioma:', e);
+        }
+        this.applyLanguage();
+      }
+
+      t(key, params = {}) {
+        const dict = (typeof TRANSLATIONS !== 'undefined' && TRANSLATIONS[this.currentLang])
+          ? TRANSLATIONS[this.currentLang]
+          : ((typeof TRANSLATIONS !== 'undefined' && TRANSLATIONS['es']) ? TRANSLATIONS['es'] : {});
+        let text = dict[key] || key;
+        for (const [k, v] of Object.entries(params)) {
+          text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), v);
+        }
+        return text;
+      }
+
+      getLevelInfo(lvlIndex) {
+        const lvlId = lvlIndex + 1;
+        const dict = typeof TRANSLATIONS !== 'undefined' ? TRANSLATIONS[this.currentLang] : null;
+        const lvlTrans = dict?.levels?.[lvlId];
+        const baseLevel = CYBER_LEVELS[lvlIndex] || { name: `Nivel ${lvlId}`, theme: '', difficulty: 'Básico' };
+        return {
+          name: lvlTrans?.name || baseLevel.name,
+          theme: lvlTrans?.theme || baseLevel.theme,
+          difficulty: lvlTrans?.difficulty || baseLevel.difficulty
+        };
+      }
+
+      getWordClue(lvlIndex, wordId) {
+        const lvlId = lvlIndex + 1;
+        const dict = typeof TRANSLATIONS !== 'undefined' ? TRANSLATIONS[this.currentLang] : null;
+        const wordTrans = dict?.levels?.[lvlId]?.words?.[wordId];
+        if (wordTrans && wordTrans.clue) return wordTrans.clue;
+        const baseWord = CYBER_LEVELS[lvlIndex]?.words.find(w => w.id === wordId);
+        return baseWord ? baseWord.clue : '';
+      }
+
+      getWordReinforce(lvlIndex, wordId) {
+        const lvlId = lvlIndex + 1;
+        const dict = typeof TRANSLATIONS !== 'undefined' ? TRANSLATIONS[this.currentLang] : null;
+        const wordTrans = dict?.levels?.[lvlId]?.words?.[wordId];
+        if (wordTrans && wordTrans.reinforce) return wordTrans.reinforce;
+        const baseWord = CYBER_LEVELS[lvlIndex]?.words.find(w => w.id === wordId);
+        return baseWord ? baseWord.reinforce : null;
+      }
+
+      applyLanguage() {
+        document.documentElement.lang = this.currentLang;
+
+        // Títulos de botones y aria-labels
+        const btnToggleSound = document.getElementById('btn-toggle-sound');
+        if (btnToggleSound) btnToggleSound.title = this.t('btn_sound_title');
+
+        const btnOpenCards = document.getElementById('btn-open-cards');
+        if (btnOpenCards) btnOpenCards.title = this.t('btn_cards_title');
+
+        const btnOpenSettings = document.getElementById('btn-open-settings');
+        if (btnOpenSettings) btnOpenSettings.title = this.t('btn_settings_title');
+
+        const btnOpenLevels = document.getElementById('btn-open-levels');
+        if (btnOpenLevels) btnOpenLevels.title = this.t('btn_levels_title');
+
+        const btnPrevClue = document.getElementById('btn-prev-clue');
+        if (btnPrevClue) btnPrevClue.title = this.t('btn_prev_clue_title');
+
+        const btnNextClue = document.getElementById('btn-next-clue');
+        if (btnNextClue) btnNextClue.title = this.t('btn_next_clue_title');
+
+        const btnHint = document.getElementById('btn-hint');
+        if (btnHint) btnHint.title = this.t('btn_hint_title');
+
+        const btnShuffle = document.getElementById('btn-shuffle');
+        if (btnShuffle) btnShuffle.title = this.t('btn_shuffle_title');
+
+        const btnBackspace = document.getElementById('btn-backspace');
+        if (btnBackspace) btnBackspace.title = this.t('btn_backspace_title');
+
+        // Textos de herramientas de entrada
+        const txtBtnHint = document.getElementById('txt-btn-hint-label');
+        if (txtBtnHint) txtBtnHint.textContent = `💡 ${this.t('btn_hint')}`;
+
+        const txtBtnShuffle = document.getElementById('txt-btn-shuffle-label');
+        if (txtBtnShuffle) txtBtnShuffle.textContent = `🔀 ${this.t('btn_shuffle')}`;
+
+        const txtBtnBackspace = document.getElementById('txt-btn-backspace-label');
+        if (txtBtnBackspace) txtBtnBackspace.textContent = `⌫ ${this.t('btn_backspace')}`;
+
+        // Modales estáticos
+        const txtRefModalTitle = document.getElementById('txt-ref-modal-title');
+        if (txtRefModalTitle) txtRefModalTitle.textContent = this.t('ref_modal_title');
+
+        const txtRefModalDesc = document.getElementById('txt-ref-modal-desc');
+        if (txtRefModalDesc) txtRefModalDesc.textContent = this.t('ref_modal_desc');
+
+        const txtRefDef = document.getElementById('txt-ref-label-def');
+        if (txtRefDef) txtRefDef.textContent = this.t('ref_label_def');
+
+        const txtRefScenario = document.getElementById('txt-ref-label-scenario');
+        if (txtRefScenario) txtRefScenario.textContent = this.t('ref_label_scenario');
+
+        const txtRefDefense = document.getElementById('txt-ref-label-defense');
+        if (txtRefDefense) txtRefDefense.textContent = this.t('ref_label_defense');
+
+        const txtRefBtnContinue = document.getElementById('txt-ref-btn-continue');
+        if (txtRefBtnContinue) txtRefBtnContinue.textContent = this.t('ref_btn_continue');
+
+        const txtVicModalTitle = document.getElementById('txt-vic-modal-title');
+        if (txtVicModalTitle) txtVicModalTitle.textContent = this.t('vic_modal_title');
+
+        const txtVicRepLbl = document.getElementById('txt-vic-rep-lbl');
+        if (txtVicRepLbl) txtVicRepLbl.textContent = this.t('vic_rep_earned');
+
+        const txtVicHintsLbl = document.getElementById('txt-vic-hints-lbl');
+        if (txtVicHintsLbl) txtVicHintsLbl.textContent = this.t('vic_hints_used');
+
+        const txtVicDesc = document.getElementById('txt-vic-desc');
+        if (txtVicDesc) txtVicDesc.textContent = this.t('vic_desc');
+
+        const txtBtnNextLevel = document.getElementById('txt-btn-next-level');
+        if (txtBtnNextLevel) txtBtnNextLevel.textContent = this.t('vic_btn_next');
+
+        const txtLevelsModalTitle = document.getElementById('txt-levels-modal-title');
+        if (txtLevelsModalTitle) txtLevelsModalTitle.textContent = this.t('levels_modal_title');
+
+        const txtDossierModalTitle = document.getElementById('txt-dossier-modal-title');
+        if (txtDossierModalTitle) txtDossierModalTitle.textContent = this.t('dossier_modal_title');
+
+        const txtSettingsTitle = document.getElementById('txt-settings-title');
+        if (txtSettingsTitle) txtSettingsTitle.textContent = this.t('settings_modal_title');
+
+        const txtSettingsLangLbl = document.getElementById('txt-settings-lang-lbl');
+        if (txtSettingsLangLbl) txtSettingsLangLbl.textContent = this.t('settings_lang_label');
+
+        const txtSettingsSoundLbl = document.getElementById('txt-settings-sound-lbl');
+        if (txtSettingsSoundLbl) txtSettingsSoundLbl.textContent = this.t('settings_sound_label');
+
+        const txtSettingsCloseBtn = document.getElementById('txt-settings-close-btn');
+        if (txtSettingsCloseBtn) txtSettingsCloseBtn.textContent = this.t('btn_close_settings');
+
+        // Actualizar visual de botones de idioma en Ajustes
+        const btnLangEs = document.getElementById('btn-lang-es');
+        const btnLangEn = document.getElementById('btn-lang-en');
+        if (btnLangEs && btnLangEn) {
+          if (this.currentLang === 'es') {
+            btnLangEs.style.borderColor = 'var(--color-cyan)';
+            btnLangEs.style.background = 'rgba(0, 240, 255, 0.15)';
+            btnLangEs.style.color = 'var(--color-cyan)';
+            btnLangEn.style.borderColor = 'var(--border-color)';
+            btnLangEn.style.background = 'var(--bg-surface)';
+            btnLangEn.style.color = 'var(--text-muted)';
+          } else {
+            btnLangEn.style.borderColor = 'var(--color-cyan)';
+            btnLangEn.style.background = 'rgba(0, 240, 255, 0.15)';
+            btnLangEn.style.color = 'var(--color-cyan)';
+            btnLangEs.style.borderColor = 'var(--border-color)';
+            btnLangEs.style.background = 'var(--bg-surface)';
+            btnLangEs.style.color = 'var(--text-muted)';
+          }
+        }
+
+        // Estado del sonido en ajustes
+        const txtSettingsSoundState = document.getElementById('txt-settings-sound-state');
+        if (txtSettingsSoundState) {
+          txtSettingsSoundState.textContent = this.audio && this.audio.isMuted
+            ? this.t('sound_disabled')
+            : this.t('sound_enabled');
+        }
+
+        // Refrescar pista activa si hay palabra seleccionada
+        if (this.currentLevel && this.activeWordId) {
+          const wObj = this.currentLevel.words.find(w => w.id === this.activeWordId);
+          if (wObj) {
+            const isHorizontal = (wObj.dir === 'H');
+            const wordNumber = this.currentLevel.words.findIndex(w => w.id === this.activeWordId) + 1;
+            this.dom.clueWordIndex.textContent = `${this.t('clue_word_label')} ${wordNumber} (${isHorizontal ? this.t('dir_horizontal') : this.t('dir_vertical')})`;
+            this.dom.clueWordLen.textContent = `[${wObj.word.length} ${this.t('letters_suffix')}]`;
+            this.dom.clueText.textContent = this.getWordClue(this.currentLevelIndex, wObj.id);
+          }
+        }
+
+        this.updateHUD();
+      }
+
+      updateHUD() {
+        const levelNumStr = String(this.currentLevelIndex + 1).padStart(2, '0');
+        this.dom.hudLevel.textContent = levelNumStr;
+        this.dom.hudRep.textContent = this.reputation;
+        this.dom.soundIcon.textContent = this.audio.isMuted ? '🔇' : '🔊';
+        this.dom.cardsBadge.textContent = this.unlockedCards.length;
+
+        // Actualizar etiqueta de pistas
+        if (this.freeHints > 0) {
+          this.dom.hintStatusPill.textContent = `${this.freeHints} ${this.t('free_hints_suffix')}`;
+          this.dom.hintStatusPill.style.color = "var(--color-green)";
+        } else {
+          this.dom.hintStatusPill.textContent = this.t('rep_cost');
+          this.dom.hintStatusPill.style.color = "var(--color-amber)";
+        }
+      }
+
+      /* ======================================================================
+         13. INICIALIZACIÓN Y CONSTRUCCIÓN DEL TABLERO
+         ====================================================================== */
+      startLevel(levelIndex) {
+        this.currentLevelIndex = levelIndex;
+        this.currentLevel = CYBER_LEVELS[this.currentLevelIndex];
+        this.mistakesPerWord = {};
+        this.hintsPerWord = {};
+
+        this.currentLevel.words.forEach(w => {
+          this.mistakesPerWord[w.id] = 0;
+          this.hintsPerWord[w.id] = 0;
+        });
+
+        this.buildGridModel();
+        this.renderGrid();
+
+        // Seleccionar por defecto la primera palabra no resuelta
+        this.selectWord(this.currentLevel.words[0].id);
+        this.saveGameState();
+        this.updateHUD();
+      }
+
+      buildGridModel() {
+        this.gridCells = {};
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+
+        this.currentLevel.words.forEach((wObj, wordIdx) => {
+          const word = wObj.word.toUpperCase();
+          const isHorizontal = (wObj.dir === 'H');
+
+          for (let i = 0; i < word.length; i++) {
+            const cx = isHorizontal ? (wObj.x + i) : wObj.x;
+            const cy = isHorizontal ? wObj.y : (wObj.y + i);
+            const key = `${cx},${cy}`;
+
+            minX = Math.min(minX, cx);
+            maxX = Math.max(maxX, cx);
+            minY = Math.min(minY, cy);
+            maxY = Math.max(maxY, cy);
+
+            if (!this.gridCells[key]) {
+              this.gridCells[key] = {
+                x: cx,
+                y: cy,
+                solution: word[i],
+                userLetter: '',
+                isLocked: false,
+                isRevealed: false,
+                words: [],
+                number: (i === 0) ? (wordIdx + 1) : null
+              };
+            } else {
+              // Celda de intersección
+              if (i === 0 && !this.gridCells[key].number) {
+                this.gridCells[key].number = (wordIdx + 1);
+              }
+            }
+
+            this.gridCells[key].words.push({
+              wordId: wObj.id,
+              charIndex: i
+            });
+          }
+        });
+
+        this.gridBounds = { minX, maxX, minY, maxY };
+      }
+
+      renderGrid() {
+        const { minX, maxX, minY, maxY } = this.gridBounds;
+        const cols = (maxX - minX + 1);
+        const rows = (maxY - minY + 1);
+
+        this.dom.grid.innerHTML = '';
+        this.dom.grid.style.gridTemplateColumns = `repeat(${cols}, var(--cell-size))`;
+        this.dom.grid.style.gridTemplateRows = `repeat(${rows}, var(--cell-size))`;
+
+        for (let y = minY; y <= maxY; y++) {
+          for (let x = minX; x <= maxX; x++) {
+            const key = `${x},${y}`;
+            const cellData = this.gridCells[key];
+
+            const cellEl = document.createElement('div');
+            cellEl.id = `cell-${x}-${y}`;
+            cellEl.dataset.key = key;
+
+            if (cellData) {
+              cellEl.className = 'grid-cell';
+              cellEl.setAttribute('role', 'gridcell');
+
+              // Número de pista
+              if (cellData.number) {
+                const numSpan = document.createElement('span');
+                numSpan.className = 'cell-number';
+                numSpan.textContent = cellData.number;
+                cellEl.appendChild(numSpan);
+              }
+
+              // Letra (si ya está escrita o bloqueada)
+              const letterSpan = document.createElement('span');
+              letterSpan.className = 'cell-char';
+              letterSpan.textContent = cellData.userLetter;
+              cellEl.appendChild(letterSpan);
+
+              cellEl.addEventListener('click', () => this.onCellClick(key));
+            } else {
+              cellEl.className = 'grid-cell empty-space';
+            }
+
+            this.dom.grid.appendChild(cellEl);
+          }
+        }
+      }
+
+      /* ======================================================================
+         14. GESTIÓN DE SELECCIÓN Y PISTAS
+         ====================================================================== */
+      onCellClick(cellKey) {
+        const cellData = this.gridCells[cellKey];
+        if (!cellData) return;
+
+        // Si la celda intersecta dos palabras y ya está activa, alternar palabra
+        if (this.activeCellKey === cellKey && cellData.words.length > 1) {
+          const currentWordRef = cellData.words.find(w => w.wordId === this.activeWordId);
+          const otherWordRef = cellData.words.find(w => w.wordId !== this.activeWordId);
+          if (otherWordRef) {
+            this.selectWord(otherWordRef.wordId, cellKey);
+            return;
+          }
+        }
+
+        // Si la celda pertenece a la palabra activa, solo mover el cursor
+        if (cellData.words.some(w => w.wordId === this.activeWordId)) {
+          this.activeCellKey = cellKey;
+          this.updateCellVisualStates();
+          this.renderClueSlots();
+        } else {
+          // Seleccionar la palabra correspondiente a esta celda
+          this.selectWord(cellData.words[0].wordId, cellKey);
+        }
+      }
+
+      selectWord(wordId, targetCellKey = null) {
+        this.activeWordId = wordId;
+        const wObj = this.currentLevel.words.find(w => w.id === wordId);
+        if (!wObj) return;
+
+        // Determinar celda cursor activa (la primera no resuelta o la solicitada)
+        if (targetCellKey) {
+          this.activeCellKey = targetCellKey;
+        } else {
+          this.activeCellKey = this.getFirstEmptyCellKeyOfWord(wObj);
+        }
+
+        // Actualizar banner de pista
+        const isHorizontal = (wObj.dir === 'H');
+        this.dom.clueDirIcon.textContent = isHorizontal ? '➔' : '⬇';
+        this.dom.clueDirIcon.style.color = isHorizontal ? 'var(--color-cyan)' : 'var(--color-green)';
+        
+        const wordNumber = this.currentLevel.words.findIndex(w => w.id === wordId) + 1;
+        this.dom.clueWordIndex.textContent = `${this.t('clue_word_label')} ${wordNumber} (${isHorizontal ? this.t('dir_horizontal') : this.t('dir_vertical')})`;
+        this.dom.clueWordLen.textContent = `[${wObj.word.length} ${this.t('letters_suffix')}]`;
+        this.dom.clueText.textContent = this.getWordClue(this.currentLevelIndex, wObj.id);
+
+        // Actualizar rueda de letras para esta palabra
+        this.generateScrambledWheel(wObj.word);
+
+        // Actualizar estilos del tablero y slots
+        this.updateCellVisualStates();
+        this.renderClueSlots();
+      }
+
+      getFirstEmptyCellKeyOfWord(wObj) {
+        const isHorizontal = (wObj.dir === 'H');
+        for (let i = 0; i < wObj.word.length; i++) {
+          const cx = isHorizontal ? (wObj.x + i) : wObj.x;
+          const cy = isHorizontal ? wObj.y : (wObj.y + i);
+          const key = `${cx},${cy}`;
+          const cell = this.gridCells[key];
+          if (cell && !cell.isLocked) {
+            return key;
+          }
+        }
+        // Si todas están bloqueadas, apuntar a la primera celda
+        return `${wObj.x},${wObj.y}`;
+      }
+
+      updateCellVisualStates() {
+        const wObj = this.currentLevel.words.find(w => w.id === this.activeWordId);
+        if (!wObj) return;
+
+        const isHorizontal = (wObj.dir === 'H');
+        const activeWordKeys = new Set();
+        for (let i = 0; i < wObj.word.length; i++) {
+          const cx = isHorizontal ? (wObj.x + i) : wObj.x;
+          const cy = isHorizontal ? wObj.y : (wObj.y + i);
+          activeWordKeys.add(`${cx},${cy}`);
+        }
+
+        for (const [key, cellData] of Object.entries(this.gridCells)) {
+          const cellEl = document.getElementById(`cell-${cellData.x}-${cellData.y}`);
+          if (!cellEl) continue;
+
+          cellEl.classList.remove('in-active-word', 'active-cursor', 'cell-locked', 'cell-revealed');
+
+          if (cellData.isLocked) {
+            cellEl.classList.add('cell-locked');
+          } else if (cellData.isRevealed) {
+            cellEl.classList.add('cell-revealed');
+          }
+
+          if (activeWordKeys.has(key)) {
+            cellEl.classList.add('in-active-word');
+          }
+
+          if (this.activeCellKey === key) {
+            cellEl.classList.add('active-cursor');
+          }
+
+          // Actualizar texto
+          const charSpan = cellEl.querySelector('.cell-char');
+          if (charSpan) {
+            charSpan.textContent = cellData.userLetter;
+          }
+        }
+      }
+
+      renderClueSlots() {
+        const wObj = this.currentLevel.words.find(w => w.id === this.activeWordId);
+        if (!wObj) return;
+
+        this.dom.clueSlots.innerHTML = '';
+        const isHorizontal = (wObj.dir === 'H');
+
+        for (let i = 0; i < wObj.word.length; i++) {
+          const cx = isHorizontal ? (wObj.x + i) : wObj.x;
+          const cy = isHorizontal ? wObj.y : (wObj.y + i);
+          const key = `${cx},${cy}`;
+          const cell = this.gridCells[key];
+
+          const slot = document.createElement('div');
+          slot.className = 'slot-pill';
+
+          if (cell.isLocked) {
+            slot.classList.add('locked');
+            slot.textContent = cell.solution;
+          } else if (cell.userLetter) {
+            slot.classList.add('filled');
+            slot.textContent = cell.userLetter;
+          } else {
+            slot.textContent = '_';
+          }
+
+          if (this.activeCellKey === key) {
+            slot.style.borderColor = 'var(--color-cyan)';
+            slot.style.boxShadow = '0 0 6px var(--color-cyan-glow)';
+          }
+
+          slot.addEventListener('click', () => {
+            this.activeCellKey = key;
+            this.updateCellVisualStates();
+            this.renderClueSlots();
+          });
+
+          this.dom.clueSlots.appendChild(slot);
+        }
+      }
+
+      /* ======================================================================
+         15. ENTRADA DE LETRAS & MECÁNICA DE RUEDA DESORDENADA
+         ====================================================================== */
+      generateScrambledWheel(targetWord) {
+        const letters = targetWord.toUpperCase().split('');
+        
+        // Algoritmo Fisher-Yates para desordenar
+        for (let i = letters.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [letters[i], letters[j]] = [letters[j], letters[i]];
+        }
+
+        // Si por azar quedó igual a la palabra, desordenar nuevamente
+        if (letters.join('') === targetWord.toUpperCase() && letters.length > 2) {
+          letters.reverse();
+        }
+
+        this.scrambledLetters = letters;
+        this.renderScrambledWheel();
+      }
+
+      renderScrambledWheel() {
+        this.dom.letterWheel.innerHTML = '';
+
+        this.scrambledLetters.forEach((letter, index) => {
+          const tile = document.createElement('button');
+          tile.className = 'letter-tile';
+          tile.textContent = letter;
+          tile.dataset.letter = letter;
+          tile.dataset.index = index;
+
+          tile.addEventListener('click', () => {
+            this.audio.playKeyTap();
+            this.typeLetter(letter);
+          });
+
+          this.dom.letterWheel.appendChild(tile);
+        });
+      }
+
+      typeLetter(letter) {
+        if (!this.activeCellKey) return;
+        const currentCell = this.gridCells[this.activeCellKey];
+        if (!currentCell) return;
+
+        // Si la celda actual ya está bloqueada, buscar la siguiente no bloqueada
+        let targetCell = currentCell;
+        let targetKey = this.activeCellKey;
+
+        if (currentCell.isLocked) {
+          const nextKey = this.getNextEmptyCellInWord(this.activeCellKey);
+          if (nextKey) {
+            targetKey = nextKey;
+            targetCell = this.gridCells[targetKey];
+          } else {
+            return; // Toda la palabra está resuelta
+          }
+        }
+
+        targetCell.userLetter = letter.toUpperCase();
+        this.activeCellKey = targetKey;
+
+        // Avanzar el cursor a la siguiente celda vacía de la palabra activa
+        const nextCellKey = this.getNextEmptyCellInWord(targetKey);
+        if (nextCellKey) {
+          this.activeCellKey = nextCellKey;
+        }
+
+        this.updateCellVisualStates();
+        this.renderClueSlots();
+
+        // Verificar si la palabra activa quedó completa
+        this.checkActiveWordCompletion();
+      }
+
+      getNextEmptyCellInWord(currentKey) {
+        const wObj = this.currentLevel.words.find(w => w.id === this.activeWordId);
+        if (!wObj) return null;
+
+        const isHorizontal = (wObj.dir === 'H');
+        const keys = [];
+        for (let i = 0; i < wObj.word.length; i++) {
+          const cx = isHorizontal ? (wObj.x + i) : wObj.x;
+          const cy = isHorizontal ? wObj.y : (wObj.y + i);
+          keys.push(`${cx},${cy}`);
+        }
+
+        const currentIndex = keys.indexOf(currentKey);
+        // Buscar hacia adelante
+        for (let i = currentIndex + 1; i < keys.length; i++) {
+          const cell = this.gridCells[keys[i]];
+          if (cell && !cell.isLocked && !cell.userLetter) {
+            return keys[i];
+          }
+        }
+        // Si no encontró adelante, buscar celdas vacías desde el inicio
+        for (let i = 0; i < keys.length; i++) {
+          const cell = this.gridCells[keys[i]];
+          if (cell && !cell.isLocked && !cell.userLetter) {
+            return keys[i];
+          }
+        }
+
+        return null;
+      }
+
+      handleBackspace() {
+        this.audio.playBackspace();
+        if (!this.activeCellKey) return;
+
+        const cell = this.gridCells[this.activeCellKey];
+        if (!cell) return;
+
+        if (!cell.isLocked && cell.userLetter) {
+          cell.userLetter = '';
+        } else {
+          // Retroceder a la celda anterior si existe
+          const prevKey = this.getPreviousCellInWord(this.activeCellKey);
+          if (prevKey) {
+            this.activeCellKey = prevKey;
+            const prevCell = this.gridCells[prevKey];
+            if (prevCell && !prevCell.isLocked) {
+              prevCell.userLetter = '';
+            }
+          }
+        }
+
+        this.updateCellVisualStates();
+        this.renderClueSlots();
+      }
+
+      getPreviousCellInWord(currentKey) {
+        const wObj = this.currentLevel.words.find(w => w.id === this.activeWordId);
+        if (!wObj) return null;
+
+        const isHorizontal = (wObj.dir === 'H');
+        const keys = [];
+        for (let i = 0; i < wObj.word.length; i++) {
+          const cx = isHorizontal ? (wObj.x + i) : wObj.x;
+          const cy = isHorizontal ? wObj.y : (wObj.y + i);
+          keys.push(`${cx},${cy}`);
+        }
+
+        const currentIndex = keys.indexOf(currentKey);
+        if (currentIndex > 0) {
+          return keys[currentIndex - 1];
+        }
+        return null;
+      }
+
+      /* ======================================================================
+         16. VERIFICACIÓN DE PALABRAS Y FINALIZACIÓN DE NIVEL
+         ====================================================================== */
+      checkActiveWordCompletion() {
+        const wObj = this.currentLevel.words.find(w => w.id === this.activeWordId);
+        if (!wObj) return;
+
+        const isHorizontal = (wObj.dir === 'H');
+        let fullInput = '';
+        let allFilled = true;
+        const cellKeys = [];
+
+        for (let i = 0; i < wObj.word.length; i++) {
+          const cx = isHorizontal ? (wObj.x + i) : wObj.x;
+          const cy = isHorizontal ? wObj.y : (wObj.y + i);
+          const key = `${cx},${cy}`;
+          cellKeys.push(key);
+
+          const cell = this.gridCells[key];
+          if (!cell || !cell.userLetter) {
+            allFilled = false;
+            break;
+          }
+          fullInput += cell.userLetter;
+        }
+
+        if (!allFilled) return;
+
+        // Comprobar si coincide con la palabra solución
+        if (fullInput.toUpperCase() === wObj.word.toUpperCase()) {
+          // ¡ÉXITO!
+          this.audio.playWordSuccess();
+
+          // Bloquear celdas y añadir efecto visual
+          cellKeys.forEach(key => {
+            const cell = this.gridCells[key];
+            cell.isLocked = true;
+            const el = document.getElementById(`cell-${cell.x}-${cell.y}`);
+            if (el) {
+              el.classList.add('word-success');
+              setTimeout(() => el.classList.remove('word-success'), 700);
+            }
+          });
+
+          this.updateCellVisualStates();
+          this.renderClueSlots();
+
+          // Verificar si todas las palabras del nivel están completas
+          const levelCompleted = this.checkLevelCompletion();
+          if (levelCompleted) {
+            this.handleLevelVictory();
+          } else {
+            // Pasar a la siguiente palabra no resuelta
+            this.cycleToNextUnsolvedWord();
+          }
+        } else {
+          // Fallo: Incrementar contador de errores de la palabra
+          this.mistakesPerWord[wObj.id] = (this.mistakesPerWord[wObj.id] || 0) + 1;
+          this.audio.playError();
+
+          // Animación de sacudida
+          cellKeys.forEach(key => {
+            const cell = this.gridCells[key];
+            const el = document.getElementById(`cell-${cell.x}-${cell.y}`);
+            if (el) {
+              el.classList.add('word-shake');
+              setTimeout(() => el.classList.remove('word-shake'), 500);
+            }
+            // Borrar sólo letras no bloqueadas
+            if (!cell.isLocked) {
+              cell.userLetter = '';
+            }
+          });
+
+          // Reubicar cursor en la primera celda vacía
+          setTimeout(() => {
+            this.activeCellKey = this.getFirstEmptyCellKeyOfWord(wObj);
+            this.updateCellVisualStates();
+            this.renderClueSlots();
+          }, 450);
+        }
+      }
+
+      checkLevelCompletion() {
+        for (const [key, cell] of Object.entries(this.gridCells)) {
+          if (!cell.isLocked) {
+            return false;
+          }
+        }
+        return true;
+      }
+
+      cycleToNextUnsolvedWord() {
+        const words = this.currentLevel.words;
+        const currentIndex = words.findIndex(w => w.id === this.activeWordId);
+
+        for (let i = 1; i <= words.length; i++) {
+          const nextIdx = (currentIndex + i) % words.length;
+          const candidate = words[nextIdx];
+
+          // Comprobar si tiene celdas sin bloquear
+          const isHorizontal = (candidate.dir === 'H');
+          let hasUnsolved = false;
+          for (let c = 0; c < candidate.word.length; c++) {
+            const cx = isHorizontal ? (candidate.x + c) : candidate.x;
+            const cy = isHorizontal ? candidate.y : (candidate.y + c);
+            if (!this.gridCells[`${cx},${cy}`].isLocked) {
+              hasUnsolved = true;
+              break;
+            }
+          }
+
+          if (hasUnsolved) {
+            setTimeout(() => {
+              this.selectWord(candidate.id);
+            }, 300);
+            return;
+          }
+        }
+      }
+
+      /* ======================================================================
+         17. SISTEMA DE PISTAS (HINTS)
+         ====================================================================== */
+      useHint() {
+        const wObj = this.currentLevel.words.find(w => w.id === this.activeWordId);
+        if (!wObj) return;
+
+        // Comprobar si el jugador puede pagar la pista
+        let isFree = false;
+        if (this.freeHints > 0) {
+          isFree = true;
+          this.freeHints--;
+        } else if (this.reputation >= 25) {
+          this.reputation -= 25;
+        } else {
+          alert(this.t('alert_no_rep'));
+          return;
+        }
+
+        // Buscar una celda no resuelta en la palabra activa (o en la celda seleccionada)
+        let targetCell = null;
+        let targetKey = null;
+
+        if (this.activeCellKey && this.gridCells[this.activeCellKey] && !this.gridCells[this.activeCellKey].isLocked) {
+          targetCell = this.gridCells[this.activeCellKey];
+          targetKey = this.activeCellKey;
+        } else {
+          // Buscar la primera celda libre
+          const isHorizontal = (wObj.dir === 'H');
+          for (let i = 0; i < wObj.word.length; i++) {
+            const cx = isHorizontal ? (wObj.x + i) : wObj.x;
+            const cy = isHorizontal ? wObj.y : (wObj.y + i);
+            const key = `${cx},${cy}`;
+            if (!this.gridCells[key].isLocked) {
+              targetCell = this.gridCells[key];
+              targetKey = key;
+              break;
+            }
+          }
+        }
+
+        if (!targetCell) return;
+
+        // Registrar uso de pista para la evaluación pedagógica
+        this.hintsPerWord[wObj.id] = (this.hintsPerWord[wObj.id] || 0) + 1;
+
+        // Desencriptar letra con animación de glissando
+        this.audio.playHintDecrypted();
+        targetCell.userLetter = targetCell.solution;
+        targetCell.isRevealed = true;
+
+        this.updateHUD();
+        this.saveGameState();
+
+        // Mover cursor a la siguiente vacía
+        const nextKey = this.getNextEmptyCellInWord(targetKey);
+        if (nextKey) {
+          this.activeCellKey = nextKey;
+        }
+
+        this.updateCellVisualStates();
+        this.renderClueSlots();
+
+        // Comprobar si al revelar la letra se resolvió la palabra
+        this.checkActiveWordCompletion();
+      }
+
+      /* ======================================================================
+         18. EVALUACIÓN INVISIBLE & TARJETAS DE REFUERZO COGNITIVO
+         ====================================================================== */
+      handleLevelVictory() {
+        this.audio.playLevelComplete();
+
+        // Calcular recompensas
+        const totalHintsUsed = Object.values(this.hintsPerWord).reduce((a, b) => a + b, 0);
+        const earnedRep = Math.max(20, 50 - (totalHintsUsed * 10));
+        this.reputation += earnedRep;
+
+        // Otorgar 1 pista gratuita adicional por superar el nivel
+        this.freeHints = Math.min(5, this.freeHints + 1);
+
+        if (!this.completedLevels.includes(this.currentLevelIndex)) {
+          this.completedLevels.push(this.currentLevelIndex);
+        }
+
+        this.saveGameState();
+        this.updateHUD();
+
+        // EVALUACIÓN INVISIBLE:
+        // Si el usuario cometió >= 2 errores o usó >= 2 pistas en cualquier palabra,
+        // se activa el protocolo de refuerzo cognitivo antes de avanzar.
+        const difficultWord = this.currentLevel.words.find(w => {
+          return (this.mistakesPerWord[w.id] >= 2) || (this.hintsPerWord[w.id] >= 2);
+        });
+
+        if (difficultWord && difficultWord.reinforce) {
+          this.showReinforcementModal(difficultWord, earnedRep, totalHintsUsed);
+        } else {
+          this.showVictoryModal(earnedRep, totalHintsUsed);
+        }
+      }
+
+      showReinforcementModal(wordObj, earnedRep, hintsUsed) {
+        const ref = this.getWordReinforce(this.currentLevelIndex, wordObj.id) || wordObj.reinforce;
+        this.dom.refCardTitle.textContent = ref.title;
+        this.dom.refCardDef.textContent = ref.def;
+        this.dom.refCardScenario.textContent = ref.scenario;
+        this.dom.refCardDefense.textContent = ref.defense;
+
+        const lvlInfo = this.getLevelInfo(this.currentLevelIndex);
+
+        // Guardar tarjeta en el glosario personal del usuario
+        if (!this.unlockedCards.some(c => c.title === ref.title)) {
+          this.unlockedCards.push({
+            title: ref.title,
+            def: ref.def,
+            scenario: ref.scenario,
+            defense: ref.defense,
+            level: lvlInfo.name
+          });
+          this.saveGameState();
+          this.updateHUD();
+        }
+
+        this.dom.modalReinforce.classList.add('open');
+
+        // Al pulsar continuar en la tarjeta de refuerzo, mostrar resumen de victoria
+        this.dom.btnCloseReinforce.onclick = () => {
+          this.dom.modalReinforce.classList.remove('open');
+          this.showVictoryModal(earnedRep, hintsUsed);
+        };
+      }
+
+      showVictoryModal(earnedRep, hintsUsed) {
+        const lvlInfo = this.getLevelInfo(this.currentLevelIndex);
+        this.dom.vicSubtitle.textContent = `${lvlInfo.name}: ${lvlInfo.theme}`;
+        this.dom.vicRep.textContent = `+${earnedRep}`;
+        this.dom.vicHints.textContent = hintsUsed;
+        this.dom.modalVictory.classList.add('open');
+      }
+
+      advanceToNextLevel() {
+        this.dom.modalVictory.classList.remove('open');
+        const nextIndex = this.currentLevelIndex + 1;
+
+        if (nextIndex < CYBER_LEVELS.length) {
+          this.startLevel(nextIndex);
+        } else {
+          alert(this.t('alert_all_levels'));
+          this.startLevel(0); // Reiniciar al primer nivel
+        }
+      }
+
+      /* ======================================================================
+         19. GLOSARIO DE TARJETAS & MATRIZ DE NIVELES
+         ====================================================================== */
+      openLevelsDrawer() {
+        this.dom.levelsList.innerHTML = '';
+
+        CYBER_LEVELS.forEach((lvl, idx) => {
+          const item = document.createElement('div');
+          item.className = 'drawer-item';
+          if (idx === this.currentLevelIndex) item.classList.add('active');
+
+          const isCompleted = this.completedLevels.includes(idx);
+          const icon = isCompleted ? '✅' : (idx === this.currentLevelIndex ? '▶️' : '🔒');
+          const lvlInfo = this.getLevelInfo(idx);
+
+          item.innerHTML = `
+            <div>
+              <div style="font-family:var(--font-mono);font-size:0.88rem;color:var(--color-cyan);font-weight:bold;">
+                ${lvlInfo.name}: ${lvlInfo.theme}
+              </div>
+              <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px;">
+                ${this.t('diff_label')} ${lvlInfo.difficulty} • ${lvl.words.length} ${this.t('concepts_label')}
+              </div>
+            </div>
+            <div style="font-size:1.1rem;">${icon}</div>
+          `;
+
+          item.addEventListener('click', () => {
+            this.dom.modalLevels.classList.remove('open');
+            this.startLevel(idx);
+          });
+
+          this.dom.levelsList.appendChild(item);
+        });
+
+        this.dom.modalLevels.classList.add('open');
+      }
+
+      openDossierDrawer() {
+        this.dom.dossierList.innerHTML = '';
+
+        if (this.unlockedCards.length === 0) {
+          this.dom.dossierList.innerHTML = `
+            <div style="text-align:center;padding:30px 10px;color:var(--text-muted);font-size:0.9rem;">
+              <div style="font-size:2rem;margin-bottom:8px;">📁</div>
+              ${this.t('dossier_empty_msg')}
+            </div>
+          `;
+        } else {
+          this.unlockedCards.forEach(card => {
+            const cardEl = document.createElement('div');
+            cardEl.className = 'reinforce-card';
+            cardEl.style.marginBottom = '12px';
+            cardEl.innerHTML = `
+              <div class="reinforce-term">${card.title}</div>
+              <div class="reinforce-block">
+                <span class="reinforce-label">${this.t('ref_label_def')}</span>
+                <div class="reinforce-text">${card.def}</div>
+              </div>
+              <div class="reinforce-block">
+                <span class="reinforce-label" style="color:var(--color-red);">${this.t('ref_label_scenario')}</span>
+                <div class="reinforce-text reinforce-box-warn">${card.scenario}</div>
+              </div>
+              <div class="reinforce-block">
+                <span class="reinforce-label" style="color:var(--color-green);">${this.t('ref_label_defense')}</span>
+                <div class="reinforce-text reinforce-box-def">${card.defense}</div>
+              </div>
+            `;
+            this.dom.dossierList.appendChild(cardEl);
+          });
+        }
+
+        this.dom.modalDossier.classList.add('open');
+      }
+
+      /* ======================================================================
+         20. EVENT LISTENERS Y ENTRADA DE TECLADO FÍSICO
+         ====================================================================== */
+      initEventListeners() {
+        // Alternar sonido desde HUD
+        document.getElementById('btn-toggle-sound').addEventListener('click', () => {
+          const muted = this.audio.toggleMute();
+          this.dom.soundIcon.textContent = muted ? '🔇' : '🔊';
+          const txtSettingsSoundState = document.getElementById('txt-settings-sound-state');
+          if (txtSettingsSoundState) {
+            txtSettingsSoundState.textContent = muted ? this.t('sound_disabled') : this.t('sound_enabled');
+          }
+        });
+
+        // Modal de Ajustes
+        const modalSettings = document.getElementById('modal-settings');
+        document.getElementById('btn-open-settings').addEventListener('click', () => {
+          modalSettings.classList.add('open');
+        });
+        document.getElementById('btn-close-settings-modal').addEventListener('click', () => {
+          modalSettings.classList.remove('open');
+        });
+        document.getElementById('btn-close-settings-action').addEventListener('click', () => {
+          modalSettings.classList.remove('open');
+        });
+
+        // Selección de Idioma
+        document.getElementById('btn-lang-es').addEventListener('click', () => this.setLanguage('es'));
+        document.getElementById('btn-lang-en').addEventListener('click', () => this.setLanguage('en'));
+
+        // Alternar Sonido desde Ajustes
+        document.getElementById('btn-settings-toggle-sound').addEventListener('click', () => {
+          const muted = this.audio.toggleMute();
+          this.dom.soundIcon.textContent = muted ? '🔇' : '🔊';
+          const txtSettingsSoundState = document.getElementById('txt-settings-sound-state');
+          if (txtSettingsSoundState) {
+            txtSettingsSoundState.textContent = muted ? this.t('sound_disabled') : this.t('sound_enabled');
+          }
+        });
+
+        // Controles de Pistas, Barajar y Borrar
+        document.getElementById('btn-hint').addEventListener('click', () => this.useHint());
+        document.getElementById('btn-shuffle').addEventListener('click', () => {
+          this.audio.playKeyTap();
+          const wObj = this.currentLevel.words.find(w => w.id === this.activeWordId);
+          if (wObj) this.generateScrambledWheel(wObj.word);
+        });
+        document.getElementById('btn-backspace').addEventListener('click', () => this.handleBackspace());
+
+        // Navegación de pistas
+        document.getElementById('btn-prev-clue').addEventListener('click', () => this.navigateClue(-1));
+        document.getElementById('btn-next-clue').addEventListener('click', () => this.navigateClue(1));
+
+        // Victoria
+        this.dom.btnNextLevel.addEventListener('click', () => this.advanceToNextLevel());
+
+        // Modales de niveles y dossier
+        document.getElementById('btn-open-levels').addEventListener('click', () => this.openLevelsDrawer());
+        document.getElementById('btn-close-levels-modal').addEventListener('click', () => {
+          this.dom.modalLevels.classList.remove('open');
+        });
+
+        document.getElementById('btn-open-cards').addEventListener('click', () => this.openDossierDrawer());
+        document.getElementById('btn-close-dossier-modal').addEventListener('click', () => {
+          this.dom.modalDossier.classList.remove('open');
+        });
+
+        // Asegurar persistencia ante salida o suspensión de app en móviles
+        window.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'hidden') this.saveGameState();
+        });
+        window.addEventListener('pagehide', () => this.saveGameState());
+
+        // Soporte de Teclado Físico (Escritorio / Laptop)
+        window.addEventListener('keydown', (e) => {
+          // Ignorar si hay modales abiertos
+          if (document.querySelector('.modal-backdrop.open')) return;
+
+          const key = e.key.toUpperCase();
+
+          if (/^[A-ZÑ]$/.test(key)) {
+            e.preventDefault();
+            this.audio.playKeyTap();
+            this.typeLetter(key);
+          } else if (e.key === 'Backspace') {
+            e.preventDefault();
+            this.handleBackspace();
+          } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            this.navigateCellCursor(1);
+          } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            this.navigateCellCursor(-1);
+          } else if (e.key === 'Tab') {
+            e.preventDefault();
+            this.navigateClue(1);
+          }
+        });
+      }
+
+      navigateClue(step) {
+        const words = this.currentLevel.words;
+        const curIdx = words.findIndex(w => w.id === this.activeWordId);
+        let nextIdx = (curIdx + step) % words.length;
+        if (nextIdx < 0) nextIdx = words.length - 1;
+        this.selectWord(words[nextIdx].id);
+      }
+
+      navigateCellCursor(delta) {
+        const wObj = this.currentLevel.words.find(w => w.id === this.activeWordId);
+        if (!wObj || !this.activeCellKey) return;
+
+        const isHorizontal = (wObj.dir === 'H');
+        const keys = [];
+        for (let i = 0; i < wObj.word.length; i++) {
+          const cx = isHorizontal ? (wObj.x + i) : wObj.x;
+          const cy = isHorizontal ? wObj.y : (wObj.y + i);
+          keys.push(`${cx},${cy}`);
+        }
+
+        const curIdx = keys.indexOf(this.activeCellKey);
+        const targetIdx = curIdx + delta;
+        if (targetIdx >= 0 && targetIdx < keys.length) {
+          this.activeCellKey = keys[targetIdx];
+          this.updateCellVisualStates();
+          this.renderClueSlots();
+        }
+      }
+    }
+
+    // Inicializar el juego al cargar el DOM
+    document.addEventListener('DOMContentLoaded', () => {
+      window.gameEngine = new CyberCrossEngine();
+
+      // Registro del Service Worker para funcionamiento 100% Offline (PWA)
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js')
+            .then(reg => console.log('[PWA] Service Worker registrado exitosamente con scope:', reg.scope))
+            .catch(err => console.error('[PWA] Error al registrar Service Worker:', err));
+        });
+      }
+    });
+  </script>
+</body>
+</html>
